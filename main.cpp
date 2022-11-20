@@ -6,13 +6,13 @@ and notify the user when the temperature or humidity goes out of that range
 Corresponding Assignment: CSE 321 Project 3 Project
 Inputs: 
     Martrix Keypad:
-    DHT11:
+    DHT11: PB1
 Outputs: 
-    Matrix Keypad: 
-    1602 LCD: 
-    Red LED: 
-    Green LED:
-    Buzzer Alarm:
+    Matrix Keypad: PB8, PB9
+    1602 LCD: PC1, PC0
+    Red LED: PA3
+    Green LED: PA2
+    Buzzer Alarm: PC8
 Constraints: 
     - When the temperature or humidity goes out of the desired range to keep refrigerated food safe to eat an alarm should sound
     - When the system is disengaged the Red LED will be on and the Green LED will be off
@@ -34,7 +34,7 @@ void systemError();
 void checkMetrics();
 
 InterruptIn buttonPushA(PB_8,PullDown);
-InterruptIn buttonPushB(PB_8,PullDown);
+InterruptIn buttonPushB(PB_9,PullDown);
 CSE321_LCD lcd(16,2,LCD_5x10DOTS,PC_1,PC_0);
 DHT11 monitor(PB_1);
 
@@ -64,11 +64,11 @@ int main()
             checkMetrics();
             rLED = 0;
             gLED = 1;
-        }
+            
             //Monitor the temperature and humidity levels
-
             //If either the temp or humid gets too high or low go to systemError
-
+        }
+            
     }
 }
 
@@ -94,7 +94,6 @@ void checkMetrics(){
         lcd.print(humReading.c_str());
         lcd.print(humRes.c_str());
         lcd.home();
-
 }
 
 
