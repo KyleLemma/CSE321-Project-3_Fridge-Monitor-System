@@ -1,6 +1,6 @@
 /*
 Code Author: Kyle Lemma
-Last Date Modified: 11/10/2022
+Last Date Modified: 11/27/2022
 Code's Purpose: To create a system that will monitor the temperature and humidity of a refrigerated area
 and notify the user when the temperature or humidity goes out of that range
 Corresponding Assignment: CSE 321 Project 3 Project
@@ -30,8 +30,12 @@ References:
 using namespace std;
 //Flag if the button to engage the system has been pushed or not
 //Use a boolean to be the argument of the while loop
-void systemError();
+void systemTempError();
+void systemHumidityError();
 void checkMetrics();
+void systemEngage();
+void systemDisengage();
+void checkLevels(int temp,int humidity);
 
 InterruptIn buttonPushA(PB_8,PullDown);
 InterruptIn buttonPushB(PB_9,PullDown);
@@ -40,30 +44,42 @@ DHT11 monitor(PB_1);
 
 DigitalOut rLED(PA_3);
 DigitalOut gLED(PA_2);
+DigitalOut keypadColumn(PC_6);
 DigitalOut buzzer(PC_8,PullDown);
 
-
+bool check;
+int temp = 0;
+int humidity = 0;
 
 int main()
 {
     //Clock turned on for GPIO B and C
     RCC->AHB2ENR |= 0x7;
-    
+
+    keypadColumn = 1;
+    rLED = 1;
     lcd.begin();
-    bool check = false;
+    check = false;
+
+    buttonPushA.rise(&systemEngage);
+    buttonPushA.enable_irq(); 
+    buttonPushB.rise(&systemDisengage);
+    buttonPushB.enable_irq();
     
     while(1){
         
-        rLED = 1;
         checkMetrics();
         //Wait 2 seconds for monitor read to reset
         wait_us(2000000);
-
         //Waiting for the system to either be enganged or disengaged by the matrix keypad   
         while(check){
+            printf("Here\n");
+            printf("%i\n",temp);
             checkMetrics();
-            rLED = 0;
-            gLED = 1;
+            wait_us(2000000);
+            
+            checkLevels(temp,humidity);
+        
             
             //Monitor the temperature and humidity levels
             //If either the temp or humid gets too high or low go to systemError
@@ -77,7 +93,7 @@ int main()
 void checkMetrics(){
         
         monitor.read();
-        int temp = monitor.getCelsius();
+        temp = monitor.getCelsius();
         string tempString = to_string(temp).c_str();
         string reading = "Temp is: ";
         string result = tempString + " C";
@@ -86,7 +102,7 @@ void checkMetrics(){
         lcd.print(result.c_str());
         lcd.setCursor(0, 1);
 
-        int humidity = monitor.getHumidity();
+        humidity = monitor.getHumidity();
         string humidString = to_string(humidity).c_str();
         string humReading = "Humidity is: ";
         string humRes = humidString+ "%";
@@ -96,11 +112,56 @@ void checkMetrics(){
         lcd.home();
 }
 
+void checkLevels(int temp, int humidity){
+    buttonPushA.disable_irq();
+    buttonPushB.disable_irq();
+    printf("Made it here\n");
+    if(temp < 1 || temp > 4){
+        systemTempError();
+    }
+    if(humidity > 50 || humidity < 30){
+        systemHumidityError();
+    }
+    buttonPushA.enable_irq();
+    buttonPushB.enable_irq();
+}
 
-void systemError(){
+
+void systemTempError(){
+    printf("Made it to temp error\n");
+    bool tempReturned = true;
+    while(tempReturned){
+        buzzer = 1;
+        lcd.print("There has been a system error");
+        if(temp < 4 && temp > 1){
+            tempReturned = false;
+        }
+    }
     //Sound the Alarm
     //Display on LCD that the System is having a problem
     //while(temp or humidity is too high wait till it fixes)
     //Once the temp or humidity corrects itself go back to monitoring the temp or humidity
 }
 
+void systemHumidityError(){
+    bool humidReturned = true;
+    while(humidReturned){
+        buzzer = 1;
+        lcd.print("There has been a system error");
+        if(humidity < 50 && humidity > 30){
+            humidReturned = false;
+        }
+    }
+}
+
+void systemEngage(){
+    check = true;
+    rLED = 0;
+    gLED = 1;
+}
+
+void systemDisengage(){
+    check = false;
+    rLED = 1;
+    gLED = 0;
+}
