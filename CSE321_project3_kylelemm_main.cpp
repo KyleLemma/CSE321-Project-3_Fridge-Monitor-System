@@ -57,8 +57,10 @@ int main()
     RCC->AHB2ENR |= 0x7;
 
     keypadColumn = 1;
+    buzzer.write(0);
     rLED = 1;
     lcd.begin();
+    lcd.clear();
     check = false;
 
     buttonPushA.rise(&systemEngage);
@@ -73,12 +75,11 @@ int main()
         wait_us(2000000);
         //Waiting for the system to either be enganged or disengaged by the matrix keypad   
         while(check){
-            printf("Here\n");
-            printf("%i\n",temp);
+        
             checkMetrics();
             wait_us(2000000);
-            
             checkLevels(temp,humidity);
+            wait_us(2000000);
         
             
             //Monitor the temperature and humidity levels
@@ -96,7 +97,7 @@ void checkMetrics(){
         temp = monitor.getCelsius();
         string tempString = to_string(temp).c_str();
         string reading = "Temp is: ";
-        string result = tempString + " C";
+        string result = tempString + " C ";
         
         lcd.print(reading.c_str());
         lcd.print(result.c_str());
@@ -105,37 +106,43 @@ void checkMetrics(){
         humidity = monitor.getHumidity();
         string humidString = to_string(humidity).c_str();
         string humReading = "Humidity is: ";
-        string humRes = humidString+ "%";
+        string humRes = humidString+ "% ";
 
         lcd.print(humReading.c_str());
         lcd.print(humRes.c_str());
+      
         lcd.home();
 }
 
 void checkLevels(int temp, int humidity){
     buttonPushA.disable_irq();
     buttonPushB.disable_irq();
-    printf("Made it here\n");
+
     if(temp < 1 || temp > 4){
         systemTempError();
     }
     if(humidity > 50 || humidity < 30){
         systemHumidityError();
     }
+    
     buttonPushA.enable_irq();
     buttonPushB.enable_irq();
 }
 
 
 void systemTempError(){
-    printf("Made it to temp error\n");
     bool tempReturned = true;
     while(tempReturned){
         buzzer = 1;
-        lcd.print("There has been a system error");
+        lcd.clear();
+        lcd.print("Temp Error");
+
         if(temp < 4 && temp > 1){
             tempReturned = false;
+            buzzer = 0;
+            lcd.clear();
         }
+    
     }
     //Sound the Alarm
     //Display on LCD that the System is having a problem
@@ -147,9 +154,11 @@ void systemHumidityError(){
     bool humidReturned = true;
     while(humidReturned){
         buzzer = 1;
-        lcd.print("There has been a system error");
+        lcd.print("Humidity Error");
         if(humidity < 50 && humidity > 30){
             humidReturned = false;
+            buzzer = 0;
+            lcd.clear();
         }
     }
 }
