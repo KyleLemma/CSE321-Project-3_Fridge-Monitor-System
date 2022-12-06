@@ -1,11 +1,11 @@
 /*
 Code Author: Kyle Lemma
-Last Date Modified: 11/27/2022
+Last Date Modified: 12/5/2022
 Code's Purpose: To create a system that will monitor the temperature and humidity of a refrigerated area
-and notify the user when the temperature or humidity goes out of that range
+and notify the user via a buzzer and the LCD screen when the temperature or humidity goes out of that range
 Corresponding Assignment: CSE 321 Project 3 Project
 Inputs: 
-    Martrix Keypad:
+    Martrix Keypad: PC6
     DHT11: PB1
 Outputs: 
     Matrix Keypad: PB8, PB9
@@ -28,8 +28,7 @@ References:
 #include <iostream>
 
 using namespace std;
-//Flag if the button to engage the system has been pushed or not
-//Use a boolean to be the argument of the while loop
+
 void systemTempError();
 void systemHumidityError();
 void checkMetrics();
@@ -45,19 +44,47 @@ DHT11 monitor(PB_1);
 DigitalOut rLED(PA_3);
 DigitalOut gLED(PA_2);
 DigitalOut keypadColumn(PC_6);
-DigitalOut buzzer(PC_8,PullDown);
+
+EventQueue queue1(32*EVENTS_EVENT_SIZE);
+Thread thread;
+Ticker tick;
+
+Mutex mutex;
+
+Watchdog &timer = Watchdog::get_instance();
 
 bool check;
 int temp = 0;
 int humidity = 0;
 
+
+/*
+**********************************************************************************************************
+main is the function that houses all initlizations and other function calls in one location
+    - Initializations for Inputs and Ouputs are made here
+    - Intializations for the clock is also made in this function
+    - Initializations for the Interrupts, pushButtonA and pushButtonB along with the ISR
+    - Initializations for the LCD
+    - Initializations for the Buzzer Alarm
+    - Initializations for the DHT11
+    - Initializations for WatchDog Timer
+    - Initializations for Threads and Ticker
+    - While loop for the function to run "forever"
+    - Nested while loop to represent the system being "Engaged"
+**********************************************************************************************************
+*/
+
 int main()
 {
-    //Clock turned on for GPIO B and C
+    //Clock turned on for GPIO A,B and C
     RCC->AHB2ENR |= 0x7;
 
+    //Bitwise Setup for PC8 for the Buzzer Activation
+    GPIOC->MODER |= 0x10000;
+    GPIOC->MODER &= ~(0x20000);
+    GPIOC -> ODR &= ~(0x100);
+    
     keypadColumn = 1;
-    buzzer.write(0);
     rLED = 1;
     lcd.begin();
     lcd.clear();
@@ -68,31 +95,37 @@ int main()
     buttonPushB.rise(&systemDisengage);
     buttonPushB.enable_irq();
     
+    thread.start(callback(&queue1,&EventQueue::dispatch_forever));
+    tick.attach(queue1.event(checkMetrics),2s);
+    timer.start(10000);
+
     while(1){
-        
-        checkMetrics();
-        //Wait 2 seconds for monitor read to reset
-        wait_us(2000000);
-        //Waiting for the system to either be enganged or disengaged by the matrix keypad   
+        timer.kick();
+
         while(check){
-        
-            checkMetrics();
-            wait_us(2000000);
+            timer.kick();
             checkLevels(temp,humidity);
-            wait_us(2000000);
-        
-            
-            //Monitor the temperature and humidity levels
-            //If either the temp or humid gets too high or low go to systemError
+            wait_us(5000000);
+             
         }
             
     }
 }
 
+//Additional Functions:
 
+/*
+**********************************************************************************************************
+checkMetrics is the function that is used to read in data from the DHT11 and output the data onto the LCD
+    - Uses the mutex to lock all global variables so they cannot be accessed by another other thread
+    - Takes in temperature and humidity from the DHT11 and write them to the LCD display in form of 
+    char arrays
+**********************************************************************************************************
+*/
 
 void checkMetrics(){
-        
+        mutex.lock();
+        lcd.clear();
         monitor.read();
         temp = monitor.getCelsius();
         string tempString = to_string(temp).c_str();
@@ -112,62 +145,153 @@ void checkMetrics(){
         lcd.print(humRes.c_str());
       
         lcd.home();
+        mutex.unlock();
 }
 
+/*
+**********************************************************************************************************
+getTemp is the function that is used to read in data from the DHT11 without the use of the LCD
+    - Uses the mutex to lock all global variables so they cannot be accessed by another other thread
+    - Takes in temperature reading in Celcius from the DHT11 and returns the value as an integer
+**********************************************************************************************************
+*/
+
+int getTemp(){
+        mutex.lock();
+        monitor.read();
+        int tempRead = monitor.getCelsius();
+        mutex.unlock();
+        return tempRead;
+}
+
+/*
+**********************************************************************************************************
+getHumid is the function that is used to read in data from the DHT11 without the use of the LCD
+    - Uses the mutex to lock all global variables so they cannot be accessed by another other thread
+    - Takes in humidity reading from the DHT11 and returns the value as an integer
+**********************************************************************************************************
+*/
+
+int getHumid(){
+        mutex.lock();
+        monitor.read();
+        int humidRead = monitor.getHumidity();
+        mutex.unlock();
+        return humidRead;
+}
+
+/*
+**********************************************************************************************************
+checkLevels is the function that is used to take the data found from checkMetrics and compare the values
+to what the expected values should be for a refrigeration unit
+    - Disables interrupts so the state cannot be changed while checking the values
+    - Checks if the temperature is in the range from 1 to 4 degrees Celcius
+    - If not calls systemTempError
+    - Checks if the humidity is in the range from 30 to 50 percent
+    - If not calls systemHumidityError
+**********************************************************************************************************
+*/
+
 void checkLevels(int temp, int humidity){
+    tick.detach();
     buttonPushA.disable_irq();
     buttonPushB.disable_irq();
 
     if(temp < 1 || temp > 4){
         systemTempError();
     }
-    if(humidity > 50 || humidity < 30){
+    else if(humidity > 50 || humidity < 30){
         systemHumidityError();
     }
     
     buttonPushA.enable_irq();
     buttonPushB.enable_irq();
+    tick.attach(queue1.event(checkMetrics),2s);
 }
 
+/*
+**********************************************************************************************************
+systemTempError is the function that is used to hold the system in a state of error until the temperature
+has gone back to a suitable level
+    - While loop that will loop while the temperature is not at a suitable level
+        -LCD will display that there is a temperature error
+    - Buzzer will sound while in while loop
+    - If block to check if the temperature has returned to a suitable level
+        -Buzzer will turn off
+**********************************************************************************************************
+*/
 
 void systemTempError(){
     bool tempReturned = true;
+    lcd.clear();
     while(tempReturned){
-        buzzer = 1;
-        lcd.clear();
+        GPIOC -> ODR |= (0x100);
         lcd.print("Temp Error");
+        wait_us(2000000);
+        lcd.clear();
 
-        if(temp < 4 && temp > 1){
+        int tempFix = getTemp();
+        if(tempFix < 4 && tempFix > 1){
             tempReturned = false;
-            buzzer = 0;
+            GPIOC -> ODR &= ~(0x100);
             lcd.clear();
         }
-    
     }
-    //Sound the Alarm
-    //Display on LCD that the System is having a problem
-    //while(temp or humidity is too high wait till it fixes)
-    //Once the temp or humidity corrects itself go back to monitoring the temp or humidity
+    lcd.clear();
 }
+
+/*
+**********************************************************************************************************
+systemHumidityError is the function that is used to hold the system in a state of error until the humidity
+has gone back to a suitable level
+    - While loop that will loop while the humidity is not at a suitable level
+        -LCD will display that there is a humidity error
+    - Buzzer will sound while in while loop
+    - If block to check if the humidity has returned to a suitable level
+        -Buzzer will turn off
+**********************************************************************************************************
+*/
 
 void systemHumidityError(){
     bool humidReturned = true;
     while(humidReturned){
-        buzzer = 1;
+        GPIOC -> ODR |= (0x100);
         lcd.print("Humidity Error");
-        if(humidity < 50 && humidity > 30){
+        wait_us(2000000);
+        lcd.clear();
+        int humidFix = getHumid();
+        if(humidFix < 50 && humidFix > 30){
             humidReturned = false;
-            buzzer = 0;
+            GPIOC -> ODR &= ~(0x100);
             lcd.clear();
         }
     }
+    lcd.clear();
 }
+
+/*
+**********************************************************************************************************
+systemEngage is the function that is used to for the pushButtonA interrupt to activate the system
+    - Turns the flag for the nested while loop in main to true
+    - Switches the red LED to off
+    - Switches the green LED to on
+**********************************************************************************************************
+*/
 
 void systemEngage(){
     check = true;
     rLED = 0;
     gLED = 1;
 }
+
+/*
+**********************************************************************************************************
+systemDisengage is the function that is used to for the pushButtonB interrupt to deactivate the system
+    - Turns the flag for the nested while loop in main to false
+    - Switches the red LED to on
+    - Switches the green LED to off
+**********************************************************************************************************
+*/
 
 void systemDisengage(){
     check = false;
