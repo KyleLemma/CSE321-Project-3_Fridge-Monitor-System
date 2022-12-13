@@ -2,7 +2,7 @@
 -------------------
 About
 -------------------
-Project Description: Creation of a Fridge Monitoring System to monitor live temperature and humidity to make sure the refrigerated stays ideal for keeping food safe and not wasted
+Project Description: Creation of a Fridge Monitoring System to monitor live temperature and humidity to make sure the refrigerated stays ideal for keeping perishable food safe and not wasted
 
 Contribitor List: Kyle Lemma
 
@@ -50,7 +50,7 @@ Getting Started
 CSE321_project3_kylelemm_main.cpp:
 --------------------
  
-This file cotains the contents for a 4-digit combination lock. This 4-digit code will be entered by a user using a Matrix Keypad, an LED will turn on each time a button on the keypad is pressed. If the correct 4-digit code was inputted, the LCD Screen will display "Unlocked" upon the 4th button press, but if the wrong code was inputted, the LCD will display a phrase, "Incorrect Code" upon the fourth button press. 
+This file cotains the contents for a refrigeration monitoring system. This system has two states which controls whether the system is engaged and monitoring the temperature and humidity or disengaged which acts as a "maintenance mode". The system pulls in the current temperature and humidity through a DHT11 every 2 seconds and verifys that those metrics are between the ideal range to store perishable foods.
 
 ----------
 Things Declared
@@ -63,17 +63,33 @@ DHT11.h
 <string>
 <iostream>
 
-- void systemError()
-- void checkMetrics()
+- void systemTempError();
+- void systemHumidityError();
+- void checkMetrics();
+- void systemEngage();
+- void systemDisengage();
+- void checkLevels(int temp,int humidity);
 
 - InterruptIn buttonPushA(PB_8,PullDown)
 - InterruptIn buttonPushB(PB_9,PullDown)
 - CSE321_LCD lcd(16,2,LCD_5x10DOTS,PC_1,PC_0)
 - DHT11 monitor(PB_1)
 
-- DigitalOut rLED(PA_3)
-- DigitalOut gLED(PA_2)
-- DigitalOut buzzer(PC_8,PullDown)
+- DigitalOut rLED(PA_3);
+- DigitalOut gLED(PA_2);
+- DigitalOut keypadColumn(PC_6);
+  
+- EventQueue queue1(32*EVENTS_EVENT_SIZE);
+- Thread thread;
+- Ticker tick;
+
+- Mutex mutex;
+
+- Watchdog &timer = Watchdog::get_instance();
+  
+- bool check;
+- int temp = 0;
+- int humidity = 0;
 
 ----------
 API and Built In Elements Used
@@ -82,6 +98,9 @@ API and Built In Elements Used
 Using Interrupts to control the key presses from the matrix keypad
 Using the LCD drivers to power and use the LCD device
 Using DigitalOut to control the buzzer and LEDs
+Using a Mutex to lock and unlock when changing the global temperature and humidity values
+Using a Thread to call the checkMetrics function to update the LCD screen every 2 seconds
+Using the WatchDog Timer to reset the system if the system has been in a temperature or humidity error for too long and has not corrected
 
 ----------
 Custom Functions
@@ -89,4 +108,10 @@ Custom Functions
 
 - systemError: This function will hold the contents for when the temperature or humidity goes out of the ideal range
 - checkMetrics: Function reads in the temperature from the DHT11 and displays the metrics on the 1602 LCD
-
+- checkLevels: Function to take the temperature and humidity levels and check them against the ideal range
+- getTemp: Function to get the current temperature of the system without updating the LCD
+- getHumid: Function to get the current humidity of the system without updating the LCD
+- systemTempError: Function that will represent a temperature error that will not release until the temperature has been corrected
+- systemHumidityError: Function that will represent a humidity error that will not release until the humidity has been corrected
+- systemEngage: Function controlled by the interrupt "A" that will change LEDs states and engage the system
+- systemDisengage: Function controlled by the interrupt "B" that will change LEDs states and disengage the system
