@@ -59,9 +59,9 @@ Things Declared
 - mbed.h
 - lcd1602.h
 - DHT11.h
-- <cstdio>
-- <string>
-- <iostream>
+- cstdio
+- string
+- iostream
 
 - void systemTempError();
 - void systemHumidityError();
