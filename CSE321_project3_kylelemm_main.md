@@ -56,12 +56,12 @@ This file cotains the contents for a refrigeration monitoring system. This syste
 Things Declared
 ----------
 
-mbed.h
-lcd1602.h
-DHT11.h
-<cstdio>
-<string>
-<iostream>
+- mbed.h
+- lcd1602.h
+- DHT11.h
+- <cstdio>
+- <string>
+- <iostream>
 
 - void systemTempError();
 - void systemHumidityError();
@@ -95,12 +95,12 @@ DHT11.h
 API and Built In Elements Used
 ----------
 
-Using Interrupts to control the key presses from the matrix keypad
-Using the LCD drivers to power and use the LCD device
-Using DigitalOut to control the buzzer and LEDs
-Using a Mutex to lock and unlock when changing the global temperature and humidity values
-Using a Thread to call the checkMetrics function to update the LCD screen every 2 seconds
-Using the WatchDog Timer to reset the system if the system has been in a temperature or humidity error for too long and has not corrected
+- Using Interrupts to control the key presses from the matrix keypad
+- Using the LCD drivers to power and use the LCD device
+- Using DigitalOut to control the buzzer and LEDs
+- Using a Mutex to lock and unlock when changing the global temperature and humidity values
+- Using a Thread to call the checkMetrics function to update the LCD screen every 2 seconds
+- Using the WatchDog Timer to reset the system if the system has been in a temperature or humidity error for too long and has not corrected
 
 ----------
 Custom Functions
